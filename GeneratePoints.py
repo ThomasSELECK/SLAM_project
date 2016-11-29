@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def GeneratePoints(nbPoints, xMax, yMax):
     points = (np.random.rand(nbPoints, 2) * 2 - 1)
     points[:, 0] = xMax * points[:, 0]
