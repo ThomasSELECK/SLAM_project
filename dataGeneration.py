@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import GeneratePoints
+from GeneratePoints import GeneratePoints
 
 
 def testRobot():
