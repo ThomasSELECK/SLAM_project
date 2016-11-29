@@ -23,18 +23,14 @@ def updateInformation():
     hGrad[i] = #dh/dyi
     identity = np.eye(N + 1)
 
+    #gGrad = A_t
     gGrad =
     covariance = np.inv(infoMatrix)
 
-    infoVectorBar = dot(dot(identity + gGrad, covariance), (identity + gGrad).T) + Sx
+    infoVectorBar = dot(dot(identity + gGrad, covariance), (identity + gGrad).T) + dot(dot(Sx,Ut),Sx.T)
     infoVectorBar = np.inv(infoVectorBar)
 
     zInvC = dot(np.inv(Z), hGrad.T)
     infoMatrix = infoMatrixBar +  dot(hGrad,zInvC)
     infoVector = infoVectorBar +  dot(sensorMeasure - h(mu) + dot(hGrad.T, mu.T) ,zInvC)
-
-
-
-
-def
 
