@@ -2,7 +2,9 @@ import numpy as np
 from numpy.linalg import inv
 from numpy import dot
 from matplotlib import pyplot as plt
+from matplotlib.patches import Circle
 import math
+import seaborn
 
 
 class BasicMovement:
@@ -19,7 +21,7 @@ class BasicMovement:
         idealMove = self.exact_move(state, command)
         realMove = self.__noisy_move(state, idealMove, noise)
         newState = state + realMove
-        return newState, idealMove, command
+        return newState, idealMove, command, noise
 
     def __choose_command(self, state):
         speed = self.maxSpeed * np.random.rand()
@@ -37,15 +39,22 @@ class BasicMovement:
         return move
 
     def __noisy_move(self, state, idealMove, noise):
-        noisyMove = idealMove[:3] + noise
-        noisySpeed, _ = self.measureFunction(noisyMove[:3], np.zeros_like(noise)[:2])
-        noisyRotation = noisyMove[2]
+        # noisyMove = idealMove[:3] + noise
+        # noisySpeed, _ = self.measureFunction(noisyMove[:3], np.zeros_like(noise)[:2])
+        # noisyRotation = noisyMove[2]
+        #
+        # maxs = [self.maxSpeed, self.maxRotation]
+        # mins = [0, -self.maxRotation]
+        # correctedCommand = np.clip([noisySpeed, noisyRotation], mins, maxs)
 
-        maxs = [self.maxSpeed, self.maxRotation]
-        mins = [0, -self.maxRotation]
-        correctedCommand = np.clip([noisySpeed, noisyRotation], mins, maxs)
+        noisyMove = np.zeros_like(state)
+        noisyMove[:3] = idealMove[:3] + noise
 
-        return self.exact_move(state, correctedCommand)
+        if(abs(noise[2]) * 180 / math.pi > 10):
+            print("HIGH VALUE OF NOISE : %f" % (noise[2] * 180 / math.pi))
+
+        return noisyMove
+        # return self.exact_move(state, correctedCommand)
 
     def __get_noise(self, covariance):
         covariance = self.covariance if covariance is None else covariance
@@ -113,12 +122,17 @@ class EIFModel:
     def update(self, measures, landmarkIds, command, U):
         self.__motion_update(command, U)
         for ldmIndex, ldmMes in zip(landmarkIds, measures):
-            self.__measurement_update(ldmMes, ldmIndex)
+            self.__measurement_update(ldmMes, int(ldmIndex))
         return self.H, self.b
 
     def __motion_update(self, command, U):
         previousMeanState = self.estimate()
         meanStateChange = self.motionModel.exact_move(previousMeanState, command)
+
+        # print("\npreviousMeanState")
+        # print(previousMeanState)
+        # print("\nmeanStateChange")
+        # print(meanStateChange)
 
         # TO IMPROVE
         angle = previousMeanState[2, 0]  # TO IMPROVE
@@ -132,15 +146,15 @@ class EIFModel:
 
     def __measurement_update(self, ldmMes, ldmIndex):
         mu = self.estimate()
-        print('\n')
-        print("Mu in Measure Update")
-        print(mu)
+        # print('\n')
+        # print("Mu in Measure Update")
+        # print(mu)
         meanMes, gradMeanMes = self.__get_mean_measurement_params(mu, ldmIndex)
-        print('\n')
-        print("meanMes")
-        print(meanMes)
-        print("gradMeanMes")
-        print(gradMeanMes)
+        # print('\n')
+        # print("meanMes")
+        # print(meanMes)
+        # print("gradMeanMes")
+        # print(gradMeanMes)
 
         z = np.array(ldmMes).reshape(len(ldmMes), 1)
         zM = np.array(meanMes).reshape(len(ldmMes), 1)
@@ -191,14 +205,14 @@ def gradMeasureFunction(rState, landmark, ldmIndex):
     return grad
 
 
-T = 100  # Number of timesteps
-nbLandmark = 1
-maxSpeed = 1
-maxRotation = 0.1 * math.pi / 180  # 45  # en radians
+T = 150  # Number of timesteps
+nbLandmark = 100
+maxSpeed = 5
+maxRotation = 45 * math.pi / 180  # 45  # en radians
 
 # Robot Detection Parameters
-detectionSize = 01
-detectionCone = 0.01  # 90 * math.pi / 180  # en radians
+detectionSize = 35
+detectionCone = 0  # 90 * math.pi / 180  # en radians
 
 robotFeaturesDim = 3
 envFeaturesDim = 2
@@ -208,23 +222,24 @@ dimension = robotFeaturesDim + nbLandmark * envFeaturesDim
 
 
 covarianceMotion = np.eye(robotFeaturesDim)
-covarianceMotion[0:2] = 0.005  # motion noise variance X
-covarianceMotion[2, 2] = (0.001 * math.pi / 180) ** 2  # motion noise variance Angle
+covarianceMotion[0, 0] = 1 ** 2  # motion noise variance X
+covarianceMotion[1, 1] = 1 ** 2  # motion noise variance Y
+covarianceMotion[2, 2] = (5 * math.pi / 180) ** 2  # motion noise variance Angle
 
 covarianceMeasurements = np.eye(mesDim)
-covarianceMeasurements[0, 0] = 4  # measurement noise variance distance
-covarianceMeasurements[1, 1] = (5. * math.pi / 180) ** 2  # motion noise variance Angle
+covarianceMeasurements[0, 0] = 1 ** 2  # measurement noise variance distance
+covarianceMeasurements[1, 1] = (5 * math.pi / 180) ** 2  # motion noise variance Angle
 
 motionModel = BasicMovement(maxSpeed, maxRotation, covarianceMotion, measureFunction)
 measurementModel = BasicMeasurement(covarianceMeasurements, robotFeaturesDim, envFeaturesDim, measureFunction, gradMeasureFunction, detectionSize, detectionCone)
 
 state = np.zeros((dimension, 1))  # Real robot state
-state[robotFeaturesDim:] = [[-5], [-5]]
-# state[robotFeaturesDim:] = np.random.rand(nbLandmark * envFeaturesDim).reshape(nbLandmark * envFeaturesDim, 1) * 40 - 20
+# state[robotFeaturesDim:] = [[-5], [-5]]
+state[robotFeaturesDim:] = np.random.rand(nbLandmark * envFeaturesDim).reshape(nbLandmark * envFeaturesDim, 1) * 300 - 150
 
 mu = np.zeros_like(state)  # Estimated robot state basic
 mu = state.copy()
-# mu[robotFeaturesDim:] += np.random.normal(0, covarianceMeasurements[0, 0], nbLandmark * envFeaturesDim).reshape(nbLandmark * envFeaturesDim, 1)
+mu[robotFeaturesDim:] += np.random.normal(0, covarianceMeasurements[0, 0], nbLandmark * envFeaturesDim).reshape(nbLandmark * envFeaturesDim, 1)
 
 muEIF = np.zeros_like(state)  # Estimated robot state using EIF Algorithm
 muEIF = mu.copy()
@@ -240,28 +255,32 @@ mus_simple[0] = np.squeeze(mu)
 mus_eif[0] = np.squeeze(muEIF)
 states[0] = np.squeeze(state)
 
-# print("BEFORE")
-# print("EIF estimate :")
-# print(muEIF)
-# print("Real state :")
-# print(state)
-# print('\n')
-
-print("INITAL")
+print("BEFORE")
+print("EIF estimate :")
+print(muEIF)
+print("Real state :")
 print(state)
 print('\n')
 
+# print("INITAL STATE")
+# print(state)
+# print('\n')
+
 for t in range(1, T):
-    state, estimatedMove, motionCommand = motionModel.move(state)
+    print("Iteration %d" % t)
+    state, estimatedMove, motionCommand, noise = motionModel.move(state)
     measures, landmarkIds = measurementModel.measure(state)
-    print("STATE")
-    print(state[:3])
-    print("Command")
-    print(estimatedMove[:3])
+    # print("\nSTATE")
+    # print(state[:])
+    # print("\nCommand")
+    # print(motionCommand[:])
+    # print("\nIdeal Move")
+    # print(estimatedMove[:])
+    # print("\nNoise")
+    # print(noise[:])
     H, b = eif.update(measures, landmarkIds, motionCommand, covarianceMotion)
 
-    mu += estimatedMove
-    # + measurement !
+    mu += motionModel.exact_move(mu, motionCommand)
     muEIF = eif.estimate()
 
     mus_simple[t] = np.squeeze(mu)
@@ -269,17 +288,30 @@ for t in range(1, T):
     states[t] = np.squeeze(state)
 
 
-# print('\n')
-# print('AFTER')
-# print("EIF estimate :")
-# print(muEIF)
-# print("Real state :")
-# print(state)
+print('\n')
+print('AFTER')
+print("EIF estimate :")
+print(muEIF)
+print("Real state :")
+print(state)
+print("Error :")
+print(state-muEIF)
+print("Max Error : %f" % max(state-muEIF))
+print("Norm Error : %f" % np.linalg.norm(state-muEIF))
 
+landmarks = state[robotFeaturesDim:].reshape(nbLandmark, 2)
 plt.figure()
+ax = plt.gca()
+for x, y in landmarks:
+    ax.add_artist(Circle(xy=(x, y),
+                  radius=detectionSize,
+                  alpha=0.3))
+plt.scatter(landmarks[:, 0], landmarks[:, 1])
+
 plt.plot(states[:, 0], states[:, 1])
 plt.plot(mus_simple[:, 0], mus_simple[:, 1])
 plt.plot(mus_eif[:, 0], mus_eif[:, 1])
+
 plt.legend(['Real position', 'Simple estimate', 'EIF estimate'])
 plt.title("{0} landmarks".format(nbLandmark))
 plt.show()
