@@ -145,7 +145,9 @@ class EIFModel:
         zM = np.array(meanMes).reshape(len(ldmMes), 1)
         C = gradMeanMes
 
-        mesError = (z - zM + dot(C.T, mu))
+        mesError = (z - zM)
+        mesError[1, 0] = clipAngle(mesError[1, 0], force=True)
+        mesError += dot(C.T, mu)
         mesError[1, 0] = clipAngle(mesError[1, 0])
         self.H += dot(dot(C, self.invZ),  C.T)
         self.b += dot(dot(mesError.T, self.invZ), C.T)
@@ -214,14 +216,14 @@ clip = False
 
 if __name__ == '__main__':
 
-    T = 200  # Number of timesteps
+    T = 500  # Number of timesteps
     nbLandmark = 64
     maxSpeed = 5
     maxRotation = 45 * math.pi / 180  # 45  # en radians
 
     # Robot Detection Parameters
     detectionSize = 40
-    detectionCone = 180 * math.pi / 180  # en radians
+    detectionCone = 0 # 180 * math.pi / 180  # en radians
 
     # Dimension Constants
     robotFeaturesDim = 3
@@ -250,8 +252,8 @@ if __name__ == '__main__':
     # Real robot state
     state = np.zeros((dimension, 1))
 
-    x = np.linspace(-150, 150, np.sqrt(nbLandmark))
-    y = np.linspace(-150, 150, np.sqrt(nbLandmark))
+    x = np.linspace(-200, 200, np.sqrt(nbLandmark))
+    y = np.linspace(-200, 200, np.sqrt(nbLandmark))
     xv, yv = np.meshgrid(x, y)
     state[robotFeaturesDim:, 0] = np.vstack([xv.ravel(), yv.ravel()]).ravel(order="F")
     # state[robotFeaturesDim:] = np.random.rand(nbLandmark * envFeaturesDim).reshape(nbLandmark * envFeaturesDim, 1) * 300 - 150
@@ -288,7 +290,7 @@ if __name__ == '__main__':
     print('\n')
 
     for t in range(1, T):
-        print("\n\nIteration %d" % t)
+        print("\nIteration %d" % t)
         state, motionCommand = motionModel.move(state)
         measures, landmarkIds = measurementModel.measure(state)
 
